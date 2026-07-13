@@ -9,6 +9,10 @@ __pycache__/
 # Node modules
 node_modules/
 
+# Next.js build output
+.next/
+frontend/dist/
+
 # Environment variables
 .env
 

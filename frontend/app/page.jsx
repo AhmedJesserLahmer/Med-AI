@@ -13,7 +13,7 @@ const SUGGESTIONS = [
   "How can I improve sleep quality?",
 ];
 
-function buildConversation(title = "New Conversation") {
+function buildConversation(title = "New conversation") {
   return {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     title,
@@ -37,16 +37,61 @@ async function askAssistant(question) {
   return data.response || data.answer || "No response returned by backend.";
 }
 
-function MessageBubble({ role, text }) {
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/* ---- Icons (inline, currentColor, no icon-font dependency) ---- */
+const PlusIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+const SendIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 12l16-7-7 16-2.5-7.5L4 12z" />
+  </svg>
+);
+const SunIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+    <circle cx="12" cy="12" r="4.2" />
+    <path d="M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7" />
+  </svg>
+);
+const MoonIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z" />
+  </svg>
+);
+const RefreshIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 0 1 15.4-6.4M21 12a9 9 0 0 1-15.4 6.4M18 3v5h-5M6 21v-5h5" />
+  </svg>
+);
+const MenuIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </svg>
+);
+const CloseIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+
+function MessageBubble({ role, text, ts }) {
   const isUser = role === "user";
 
   return (
     <div className={`message-row ${isUser ? "user" : "ai"}`}>
-      <div className={`avatar ${isUser ? "user-avatar" : "ai-avatar"}`}>
+      <div className={`avatar ${isUser ? "user" : "ai"}`} aria-hidden="true">
         {isUser ? "You" : "AI"}
       </div>
-      <div className="message-bubble">
-        <div className="message-sender">{isUser ? "You" : "MedAssist"}</div>
+      <div className="message-col">
+        <div className="message-meta">
+          <span className="message-sender">{isUser ? "You" : "MedAssist"}</span>
+          <span className="message-time">{formatTime(ts)}</span>
+        </div>
         <div className="message-text">{text}</div>
       </div>
     </div>
@@ -60,7 +105,9 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [backendStatus, setBackendStatus] = useState("checking");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
   useEffect(() => {
     const cachedTheme = localStorage.getItem(THEME_KEY);
@@ -139,10 +186,18 @@ export default function Home() {
     const next = buildConversation();
     setConversations((prev) => [next, ...prev]);
     setActiveConversationId(next.id);
+    setSidebarOpen(false);
   };
 
   const clearActiveConversation = () => {
-    updateActiveConversation((item) => ({ ...item, title: "New Conversation", messages: [] }));
+    updateActiveConversation((item) => ({ ...item, title: "New conversation", messages: [] }));
+  };
+
+  const autoResize = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   };
 
   const handleSend = async (customText) => {
@@ -150,6 +205,7 @@ export default function Home() {
     if (!message || isSending || !activeConversation) return;
 
     setInput("");
+    requestAnimationFrame(autoResize);
     setIsSending(true);
 
     const userMessage = { role: "user", text: message, ts: Date.now() };
@@ -189,54 +245,94 @@ export default function Home() {
   };
 
   return (
-    <div className="layout">
-      <aside className="sidebar">
-        <div className="logo-block">
-          <h1>MedAssist</h1>
-          <p>RAG + Groq</p>
+    <div className="app">
+      <div
+        className={`scrim ${sidebarOpen ? "open" : ""}`}
+        onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
+      />
+
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+        <div className="brand">
+          <div className="brand-mark">M</div>
+          <div className="brand-text">
+            <h1>MedAssist</h1>
+            <p>Hybrid RAG + Groq</p>
+          </div>
+          <button
+            className="icon-btn mobile-close"
+            style={{ marginLeft: "auto" }}
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+          >
+            <CloseIcon />
+          </button>
         </div>
 
-        <button className="action-btn" onClick={createConversation}>
-          New Conversation
+        <button className="new-chat-btn" onClick={createConversation}>
+          <PlusIcon />
+          New conversation
         </button>
 
+        <div className="rail-label">History</div>
         <div className="history-list">
           {conversations.map((item) => (
             <button
               key={item.id}
               className={`history-item ${item.id === activeConversation?.id ? "active" : ""}`}
-              onClick={() => setActiveConversationId(item.id)}
+              onClick={() => {
+                setActiveConversationId(item.id);
+                setSidebarOpen(false);
+              }}
             >
               {item.title}
             </button>
           ))}
         </div>
 
-        <button
-          className="theme-btn"
-          onClick={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
-        >
-          {theme === "light" ? "Switch To Dark" : "Switch To Light"}
-        </button>
+        <div className="sidebar-footer">
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
+            aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+          >
+            {theme === "light" ? <MoonIcon /> : <SunIcon />}
+            {theme === "light" ? "Dark" : "Light"}
+          </button>
+        </div>
       </aside>
 
       <main className="chat-panel">
         <header className="topbar">
-          <div>
-            <h2>{activeConversation?.title || "New Conversation"}</h2>
-            <p>
-              Model: Groq · Status: {backendStatus}
-            </p>
-          </div>
-          <button className="ghost-btn" onClick={clearActiveConversation}>
-            Clear Chat
+          <button
+            className="icon-btn menu-btn"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
+          >
+            <MenuIcon />
           </button>
+
+          <div className="topbar-title">
+            <h2>{activeConversation?.title || "New conversation"}</h2>
+            <span className="status-pill">
+              <span className={`status-dot ${backendStatus}`} aria-hidden="true" />
+              <span className="status-model">Groq · llama-3.3-70b · </span>
+              {backendStatus}
+            </span>
+          </div>
+
+          <div className="topbar-actions">
+            <button className="icon-btn" onClick={clearActiveConversation} aria-label="Clear conversation">
+              <RefreshIcon />
+              <span className="btn-label">Clear</span>
+            </button>
+          </div>
         </header>
 
-        <section className="messages">
+        <section className="messages" aria-live="polite">
           {activeConversation?.messages.length ? (
             activeConversation.messages.map((msg, idx) => (
-              <MessageBubble key={`${msg.ts}-${idx}`} role={msg.role} text={msg.text} />
+              <MessageBubble key={`${msg.ts}-${idx}`} role={msg.role} text={msg.text} ts={msg.ts} />
             ))
           ) : (
             <div className="welcome">
@@ -256,10 +352,18 @@ export default function Home() {
 
           {isSending ? (
             <div className="message-row ai">
-              <div className="avatar ai-avatar">AI</div>
-              <div className="message-bubble">
-                <div className="message-sender">MedAssist</div>
-                <div className="message-text">Thinking...</div>
+              <div className="avatar ai" aria-hidden="true">AI</div>
+              <div className="message-col">
+                <div className="message-meta">
+                  <span className="message-sender">MedAssist</span>
+                </div>
+                <div className="message-text">
+                  <span className="typing-dots" aria-label="MedAssist is typing">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                </div>
               </div>
             </div>
           ) : null}
@@ -267,20 +371,34 @@ export default function Home() {
         </section>
 
         <footer className="composer">
-          <textarea
-            placeholder="Describe symptoms or ask a medical question..."
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                handleSend();
-              }
-            }}
-          />
-          <button className="send-btn" onClick={() => handleSend()} disabled={!input.trim() || isSending}>
-            Send
-          </button>
+          <div className="composer-inner">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              placeholder="Describe symptoms or ask a medical question..."
+              value={input}
+              onChange={(event) => {
+                setInput(event.target.value);
+                autoResize();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  handleSend();
+                }
+              }}
+              aria-label="Message MedAssist"
+            />
+            <button
+              className="send-btn"
+              onClick={() => handleSend()}
+              disabled={!input.trim() || isSending}
+              aria-label="Send message"
+            >
+              <SendIcon />
+            </button>
+          </div>
+          <p className="composer-hint">MedAssist can make mistakes. Verify important medical information.</p>
         </footer>
       </main>
     </div>
