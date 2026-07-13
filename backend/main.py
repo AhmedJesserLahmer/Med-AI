@@ -1,12 +1,8 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from database import SessionLocal, engine
-from models import Base, ChatHistory
+from database import chat_history_collection
 from schemas import ChatRequest, ChatResponse
 from rag_model import RAG_Solution
-
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -17,22 +13,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+@app.get("/")
+def root():
+    return {
+        "message": "Med-AI backend is running.",
+        "docs": "/docs",
+        "rag_endpoint": {
+            "path": "/rag",
+            "method": "POST",
+            "body": {"question": "What are the symptoms of diabetes?"}
+        }
+    }
+
+@app.get("/rag")
+def rag_help():
+    return {
+        "message": "Use POST /rag with JSON body.",
+        "example": {"question": "What are the symptoms of diabetes?"}
+    }
 
 @app.post("/rag", response_model=ChatResponse)
-def chat(request: ChatRequest, db: Session = Depends(get_db)):
+async def chat(request: ChatRequest):
     answer = RAG_Solution(request.question)
-    chat_entry = ChatHistory(
-        user_message=request.question,
-        ai_response=answer
-    )
-    db.add(chat_entry)
-    db.commit()
+    await chat_history_collection.insert_one({
+        "user_message": request.question,
+        "ai_response": answer
+    })
     return {"response": answer}
 
 if __name__ == "__main__":

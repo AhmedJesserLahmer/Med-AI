@@ -1,13 +1,11 @@
 fastapi
 uvicorn
-transformers
-torch
-sqlalchemy
-pymysql
-cryptography
+motor
 python-dotenv
 langchain
 langchain-community
+langchain-pinecone
 langchain-huggingface
 sentence-transformers
 pinecone
+groq
