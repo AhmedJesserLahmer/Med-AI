@@ -20,10 +20,13 @@ services:
       - mongo
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # Browser-facing URL: the host machine reaches the backend via its
+        # published port, not the internal Docker network name.
+        NEXT_PUBLIC_API_URL: http://localhost:8000/rag
     restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000/rag
     ports:
       - "3000:3000"
     depends_on:
