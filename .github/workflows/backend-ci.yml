@@ -16,16 +16,23 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: "pip"
           cache-dependency-path: backend/requirements-dev.txt
 
       - name: Install dev dependencies
-        run: pip install ruff pytest
+        # ruff/pytest are the tools; pydantic is a real runtime dependency of
+        # backend/schemas.py, which backend/tests/test_schemas.py imports.
+        # This deliberately does NOT install the full backend/requirements.txt
+        # (torch/langchain/etc.) to keep this job fast -- but that means any
+        # new test file that imports another backend module must add that
+        # module's dependencies here explicitly, or it will fail to even
+        # collect (ModuleNotFoundError), not just fail its assertions.
+        run: pip install ruff pytest pydantic
 
       - name: Lint with ruff
         run: ruff check backend

@@ -18,14 +18,14 @@ jobs:
   ndcg-eval:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
       - name: Cache pip + HuggingFace model downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/pip
@@ -34,6 +34,15 @@ jobs:
 
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
+
+      - name: Check PINECONE_API_KEY secret is configured
+        env:
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+        run: |
+          if [ -z "$PINECONE_API_KEY" ]; then
+            echo "::error::PINECONE_API_KEY repository secret is not set. Add it under Settings > Secrets and variables > Actions using the same value as your local .env, pointing at the Pinecone index backend/ingest.py populated. See README.md#ci for details."
+            exit 1
+          fi
 
       - name: Run NDCG regression check
         env:
