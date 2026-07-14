@@ -5,3 +5,5 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+    confidence: float
+    sources: list[str]

@@ -8,7 +8,9 @@ services:
       - mongo_data:/data/db
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     env_file:
       - .env

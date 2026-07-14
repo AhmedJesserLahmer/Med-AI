@@ -15,13 +15,13 @@
 
 | Stage | What it does |
 |---|---|
-| 🟠 **Dense search** | Pinecone + `thenlper/gte-small` embeddings — catches semantic similarity |
+| 🟠 **Dense search** | Pinecone + `BAAI/bge-small-en-v1.5` embeddings — catches semantic similarity |
 | 🟡 **Sparse search** | BM25 (`rank_bm25`) over the same chunks — catches exact keyword/acronym matches dense search misses |
 | 🔴 **Rank fusion** | Reciprocal Rank Fusion (RRF) merges both ranked lists without needing comparable score scales |
 | 🟤 **Reranking** | A cross-encoder (`ms-marco-MiniLM-L-6-v2`) rescopes the fused candidates for the final, sharpest ordering |
 | 🟢 **Evaluation** | NDCG@k compares dense-only vs. sparse-only vs. fused vs. reranked, so the pipeline's gains are measurable, not just assumed |
 
-All of this — ingestion (PDF/DOCX/HTML/CSV/TXT), hybrid retrieval, fusion, reranking, and NDCG evaluation — lives in [`RAG_New_solution.ipynb`](./RAG_New_solution.ipynb). The FastAPI backend currently serves the simpler dense-only path in production (`backend/rag_model.py`); the notebook is where the hybrid pipeline is developed and evaluated.
+This pipeline was originally developed and evaluated in [`RAG_New_solution.ipynb`](./RAG_New_solution.ipynb); it's now also what actually serves production traffic — `backend/retrieval.py` runs the same dense + BM25 + RRF + cross-encoder rerank stack for every live `/rag` request (previously the backend only did plain dense-only search, a gap that's now closed). The notebook remains the place to experiment with ingestion, chunking, and retrieval changes before they're ported into the backend.
 
 ---
 
@@ -42,26 +42,45 @@ One "ask a question" round trip, end to end:
 ## 🧱 Stack
 
 - **Frontend:** Next.js (React) — chat UI, calls the backend directly
-- **Backend:** FastAPI — `POST /rag`
-- **Database:** MongoDB — chat history (`chat_history` collection)
-- **Vector store:** Pinecone — dense embeddings (`gte-small`)
-- **Sparse index:** BM25 (`rank_bm25`) — notebook only, for hybrid retrieval
+- **Backend:** FastAPI — `POST /rag`, `GET /eval`
+- **Database:** MongoDB — chat history (`chat_history` collection), including per-query confidence + sources
+- **Vector store:** Pinecone — dense embeddings (`BAAI/bge-small-en-v1.5`, same model used at ingestion and query time)
+- **Sparse index:** BM25 (`rank_bm25`) — built in-memory by the backend at startup
 - **LLM:** Groq (`llama-3.3-70b-versatile`)
-- **Reranker:** `cross-encoder/ms-marco-MiniLM-L-6-v2` — notebook only
+- **Reranker:** `cross-encoder/ms-marco-MiniLM-L-6-v2` — runs on every live query in `backend/retrieval.py`
 
 ## 📂 Ingestion
 
-`RAG_New_solution.ipynb` ingests a folder of mixed-format files (`.txt`, `.md`, `.pdf`, `.docx`, `.html`/`.htm`, `.csv`), chunks them, embeds them, and upserts them into Pinecone — plus builds the in-memory BM25 corpus used for hybrid search.
+`backend/ingest.py` (shared loading/chunking code in `backend/ingestion.py`, also used by the notebook) loads a folder of mixed-format files (`.txt`, `.md`, `.pdf`, `.docx`, `.html`/`.htm`, `.csv`) from `./data`, chunks them, embeds them, and upserts them into Pinecone with `doc_id` metadata. Run it manually whenever `./data` changes:
+
+```bash
+cd backend
+python ingest.py
+```
+
+The backend rebuilds the same chunk corpus from `./data` at startup (cheap — just loading + splitting, no re-embedding) to build its in-memory BM25 index and to resolve `doc_id`s for the `/eval` benchmark.
+
+## 📊 Live endpoints
+
+- `POST /rag` — `{"question": "..."}` → `{"response": "...", "confidence": 0.0-1.0, "sources": ["..."]}`. `confidence` is a sigmoid-squashed cross-encoder rerank score for the top retrieved chunk — a proxy signal for how well-grounded the answer is, logged to `chat_history` for every query. It is **not** NDCG: NDCG needs labeled ground truth, which doesn't exist for arbitrary live questions.
+- `GET /eval` — runs the real NDCG@5 benchmark (dense-only / sparse-only / hybrid-fused / hybrid-reranked) against a fixed, labeled query set (`backend/eval.py`), for checking retrieval-quality regressions on demand.
 
 ## 🚀 Running locally
 
 ### Backend
 
+Run these from the **repo root** (not from inside `backend/`) — `./data` is resolved relative to
+the current working directory, and it lives at the repo root alongside `backend/`, matching how
+the Docker image lays things out (`data/` copied next to the app files, see `backend/Dockerfile`):
+
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+pip install -r backend/requirements.txt
+python backend/ingest.py                              # one-time: populate Pinecone (needs PINECONE_API_KEY set)
+uvicorn main:app --reload --port 8000 --app-dir backend
 ```
+
+`retrieval.py` loads `./data` and builds the BM25 index at import time, so `ingest.py` must have
+been run at least once against the same Pinecone index before starting the server.
 
 Environment variables (see `.env`):
 
