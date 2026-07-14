@@ -1,0 +1,48 @@
+name: Docker build check
+
+# Validates both Dockerfiles still build successfully. Images are built but
+# never pushed anywhere -- there's no registry/hosting wired up yet. Once a
+# deploy target is chosen, this is the natural place to add a login step and
+# flip `push: true`.
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "data/**"
+      - "docker-compose.yml"
+      - ".github/workflows/docker-build.yml"
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch: {}
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: false
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:8000/rag

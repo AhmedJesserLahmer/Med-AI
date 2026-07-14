@@ -65,6 +65,19 @@ The backend rebuilds the same chunk corpus from `./data` at startup (cheap — j
 - `POST /rag` — `{"question": "..."}` → `{"response": "...", "confidence": 0.0-1.0, "sources": ["..."]}`. `confidence` is a sigmoid-squashed cross-encoder rerank score for the top retrieved chunk — a proxy signal for how well-grounded the answer is, logged to `chat_history` for every query. It is **not** NDCG: NDCG needs labeled ground truth, which doesn't exist for arbitrary live questions.
 - `GET /eval` — runs the real NDCG@5 benchmark (dense-only / sparse-only / hybrid-fused / hybrid-reranked) against a fixed, labeled query set (`backend/eval.py`), for checking retrieval-quality regressions on demand.
 
+## ✅ CI
+
+Four workflows under [`.github/workflows/`](.github/workflows/), each scoped to only the paths it cares about:
+
+| Workflow | Runs on | What it checks |
+|---|---|---|
+| `backend-ci.yml` | changes under `backend/**` | `ruff check backend` + `pytest backend/tests` — fast, no external services (only pure functions in `ranking.py` and pydantic schemas are under test, so no Pinecone/Groq/Mongo secrets needed) |
+| `frontend-ci.yml` | changes under `frontend/**` | `npm run lint` (ESLint) + `npm run build` |
+| `ndcg-eval.yml` | changes under `backend/**` or `data/**` | `backend/check_eval.py` — the real NDCG@5 benchmark against the labeled query set; fails if `hybrid_reranked` drops below `NDCG_FLOOR`. Needs a `PINECONE_API_KEY` repository secret (Settings → Secrets and variables → Actions) pointing at the same index `backend/ingest.py` populates |
+| `docker-build.yml` | changes touching either app or `docker-compose.yml` | builds both Dockerfiles to catch breakage early; images aren't pushed anywhere yet since there's no registry/hosting wired up |
+
+All four also support manual runs via `workflow_dispatch`. There's no CD (deployment) yet — `docker-build.yml` is the natural place to add a registry push once a host is picked.
+
 ## 🚀 Running locally
 
 ### Backend

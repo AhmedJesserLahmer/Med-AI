@@ -1,0 +1,41 @@
+name: NDCG regression check
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - "backend/**"
+      - "data/**"
+      - ".github/workflows/ndcg-eval.yml"
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "backend/**"
+      - "data/**"
+  workflow_dispatch: {}
+
+jobs:
+  ndcg-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip + HuggingFace model downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface
+          key: ${{ runner.os }}-ndcg-eval-${{ hashFiles('backend/requirements.txt') }}
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run NDCG regression check
+        env:
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+        run: python backend/check_eval.py

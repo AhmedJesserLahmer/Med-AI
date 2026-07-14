@@ -5,10 +5,10 @@ score returned by /rag -- NDCG needs ground-truth relevant docs, which don't
 exist for arbitrary live questions, so it can only ever be computed against a
 known, labeled benchmark like TEST_QUERIES below.
 """
-import math
 from typing import Dict, List, Tuple
 
 import retrieval
+from ranking import ndcg_at_k
 
 # Real test cases: each maps a natural question to the doc_id(s) in
 # healthcare_rag_dataset.csv that should answer it. Documents of the same
@@ -72,14 +72,6 @@ RETRIEVAL_METHODS = {
     "hybrid_fused": lambda q: [r["id"] for r in retrieval.hybrid_search_fused(q, top_k=K)],
     "hybrid_reranked": lambda q: [r["id"] for r in retrieval.hybrid_search(q, top_k=K)],
 }
-
-
-def ndcg_at_k(relevances: List[int], k: int) -> float:
-    relevances = relevances[:k]
-    dcg = sum((2 ** rel - 1) / math.log2(i + 2) for i, rel in enumerate(relevances))
-    ideal = sorted(relevances, reverse=True)
-    idcg = sum((2 ** rel - 1) / math.log2(i + 2) for i, rel in enumerate(ideal))
-    return dcg / idcg if idcg > 0 else 0.0
 
 
 def chunk_ids_for_doc(doc_id: str) -> List[str]:

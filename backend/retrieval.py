@@ -19,6 +19,7 @@ from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
 
 from ingestion import EMBEDDING_MODEL_NAME, load_and_chunk
+from ranking import reciprocal_rank_fusion
 
 load_dotenv()
 
@@ -80,14 +81,6 @@ def sparse_search(query: str, top_k: int = 10) -> List[dict]:
         {"id": chunk_ids[i], "score": float(scores[i]), "text": id_to_text[chunk_ids[i]]}
         for i in ranked_idx
     ]
-
-
-def reciprocal_rank_fusion(rankings: List[List[str]], k: int = 60) -> List[str]:
-    fused_scores: Dict[str, float] = {}
-    for ranking in rankings:
-        for rank, doc_id in enumerate(ranking):
-            fused_scores[doc_id] = fused_scores.get(doc_id, 0.0) + 1.0 / (k + rank + 1)
-    return sorted(fused_scores, key=fused_scores.get, reverse=True)
 
 
 def hybrid_search_fused(query: str, top_k: int = 10, candidate_pool: int = 30) -> List[dict]:

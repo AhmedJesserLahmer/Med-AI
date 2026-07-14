@@ -1,0 +1,39 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "backend/**"
+  workflow_dispatch: {}
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dev dependencies
+        run: pip install ruff pytest
+
+      - name: Lint with ruff
+        run: ruff check backend
+
+      - name: Run unit tests
+        # No PINECONE_API_KEY/GROQ_API_KEY/MONGODB_URI needed here: these
+        # tests only exercise pure functions (backend/ranking.py) and pydantic
+        # schemas (backend/schemas.py) -- nothing that imports retrieval.py's
+        # heavy Pinecone/embedding/reranker setup. The Pinecone-backed NDCG
+        # regression check lives in .github/workflows/ndcg-eval.yml instead.
+        run: pytest backend/tests -v
